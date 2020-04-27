@@ -9,16 +9,18 @@ import os
 sg.theme('BrownBlue')  
 
 folder_path = ''
-file_path = ''
+files_path = []
+num_of_files = 0
 import_success = False
 
-
-def get_first_file(folder_path):
+def get_files():
     images_path = os.listdir(folder_path)
     images_path.sort()
-    filename = images_path[0]
-    file_path = '{}/{}'.format(folder_path, filename) 
-    return file_path
+    for image in images_path:
+        filename = '{}/{}'.format(folder_path, image)
+        files_path.append(filename)
+    return len(files_path)
+
 
 def view_dcm(image_path):
     ds = dicom.dcmread(image_path)
@@ -44,7 +46,7 @@ while True:
     if event in ('Import'):
         folder_path = values['folder_path']
         if folder_path != '':
-            file_path = get_first_file(folder_path)
+            num_of_files = get_files()
             import_success = True
             break
 popup.close()
@@ -52,11 +54,13 @@ popup.close()
 if import_success:
 
     title = {'size':(35, 1), 'font':('Helvetica', 16)}
-    window_prop = {'margins':(0,0), 'size':(630, 330), 'return_keyboard_events':True}
+    slider_prop = {'range':(0, num_of_files), 'orientation':'h', 'size':(35, 20), 'default_value':0}
+    window_prop = {'margins':(0,0), 'size':(625, 335), 'return_keyboard_events':True}
     buttons_prop = {'size':(30, 1), 'font':('Helvetica', 12)}
 
     col1 = [[sg.Text('Original Image', **title)],
             [sg.Button('View Original Image', **buttons_prop)],
+            [sg.Slider(key='orig_image_slider', **slider_prop)],
             [sg.Text('_'  * 50, size=(40, 1))],
             [sg.Text('Segmentation:', size=(20,1), font=('Helvetica', 14))],
             [sg.Radio('Boundary Extraction', 'loss', **buttons_prop)],
@@ -66,6 +70,7 @@ if import_success:
     
     col2 = [[sg.Text('Transformed Image', **title)],
             [sg.Button('View Transformed Image', **buttons_prop)],
+            [sg.Slider(key='new_image_slider', **slider_prop)],
             [sg.Text('_'  * 50, size=(40, 1))],
             [sg.Text('Quantification:', size=(20,1), font=('Helvetica', 14))],
             [sg.Radio('Quantification method1', 'loss', **buttons_prop)],
@@ -88,5 +93,6 @@ if import_success:
         if event in (None, 'Cancel'):
             break
         if event in ('View Original Image'):
-            view_dcm(file_path) 
+            index = int(values['orig_image_slider'])
+            view_dcm(files_path[index]) 
     window.close()
