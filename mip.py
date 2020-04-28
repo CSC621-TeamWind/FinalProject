@@ -6,6 +6,8 @@ import pydicom as dicom
 import matplotlib.pyplot as plt
 import os
 
+import vtk
+
 sg.theme('BrownBlue')  
 
 folder_path = ''
@@ -17,13 +19,13 @@ def get_files():
     images_path = os.listdir(folder_path)
     images_path.sort()
     for image in images_path:
-        filename = '{}/{}'.format(folder_path, image)
+        filename = os.path.join(folder_path, image)
         files_path.append(filename)
     return len(files_path)
 
-
-def view_dcm(image_path):
+def view_dcm(img_title, image_path):
     ds = dicom.dcmread(image_path)
+    plt.title(img_title)
     plt.imshow(ds.pixel_array)
     plt.show()
 
@@ -52,15 +54,11 @@ while True:
 popup.close()
 
 if import_success:
-
-    title = {'size':(35, 1), 'font':('Helvetica', 16)}
-    slider_prop = {'range':(0, num_of_files), 'orientation':'h', 'size':(35, 20), 'default_value':0}
-    window_prop = {'margins':(0,0), 'size':(625, 335), 'return_keyboard_events':True}
+    slider_prop = {'range':(0, num_of_files), 'orientation':'h', 'size':(70, 20), 'default_value':0}
+    window_prop = {'margins':(0,0), 'size':(520, 350), 'return_keyboard_events':True}
     buttons_prop = {'size':(30, 1), 'font':('Helvetica', 12)}
 
-    col1 = [[sg.Text('Original Image', **title)],
-            [sg.Button('View Original Image', **buttons_prop)],
-            [sg.Slider(key='orig_image_slider', **slider_prop)],
+    col1 = [[sg.Button('View Original Image', **buttons_prop)],
             [sg.Text('_'  * 50, size=(40, 1))],
             [sg.Text('Segmentation:', size=(20,1), font=('Helvetica', 14))],
             [sg.Radio('Boundary Extraction', 'loss', **buttons_prop)],
@@ -68,9 +66,7 @@ if import_success:
             [sg.Radio('Thresholding', 'loss', **buttons_prop)],
             [sg.Button('Run Segmentation', **buttons_prop)]]
     
-    col2 = [[sg.Text('Transformed Image', **title)],
-            [sg.Button('View Transformed Image', **buttons_prop)],
-            [sg.Slider(key='new_image_slider', **slider_prop)],
+    col2 = [[sg.Button('View Transformed Image', **buttons_prop)],
             [sg.Text('_'  * 50, size=(40, 1))],
             [sg.Text('Quantification:', size=(20,1), font=('Helvetica', 14))],
             [sg.Radio('Quantification method1', 'loss', **buttons_prop)],
@@ -79,20 +75,24 @@ if import_success:
             [sg.Button('Run Quantification', **buttons_prop)]]
 
     # All the elements inside the window. 
-    layout = [[sg.Column(col1), sg.Column(col2)],
+    layout = [[sg.Text('Move through images:', size=(35, 1), font=('Helvetica', 16))],
+              [sg.Slider(key='image_slider', **slider_prop)],
+              [sg.Column(col1), sg.Column(col2)],
               [sg.Text('', size=(400, 1))],
-              [sg.Button('View Histogram', size=(100, 1.5))]]
+              [sg.Button('View Histogram', size=(80, 1.5))]]
 
     # Create the window
     window = sg.Window('Medical Image Processor', layout, **window_prop)
 
-    
     # Event Loop to process events
     while True:             
         event, values = window.read()
         if event in (None, 'Cancel'):
             break
         if event in ('View Original Image'):
-            index = int(values['orig_image_slider'])
-            view_dcm(files_path[index]) 
+            index = int(values['image_slider'])
+            view_dcm('Original Image', files_path[index]) 
+        if event in ('View Transformed Image'):
+            index = int(values['image_slider'])
+            view_dcm('Transformed Image', files_path[index]) 
     window.close()
