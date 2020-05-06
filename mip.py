@@ -4,10 +4,10 @@ import io
 
 import pyvista as pv
 import os
-
 import vtk
-from DicomSeriesReader import dicom_series_reader
-from Medical4 import view_3d
+from VisualizationHandler import *
+from Segmentation import *
+
 
 sg.theme('BrownBlue')  
 
@@ -16,28 +16,15 @@ files_path = []
 num_of_files = 0
 nrrd_file = './bin/ct_lungs.nrrd' 
 import_success = False
-
-def get_files():
-    images_path = os.listdir(folder_path)
-    images_path.sort()
-    for image in images_path:
-        filename = os.path.join(folder_path, image)
-        files_path.append(filename)
-    return len(files_path)
-
-def view_dcm(img_title, image_path):
-    # read using vtk
-    reader = vtk.vtkDICOMImageReader()
-    reader.SetFileName(image_path)
-    reader.Update()
-    data = pv.wrap(reader.GetOutput())
-    # and plot it with a bone colormap
-    data.plot(cmap='bone', cpos='xy')
-    
+images = []
+resampled_images = []
+temp_resampled_images = []
+t_images = []
+c_label = False
 
 button_prop = {'size':(8,1), 'font':('Helevetica', 12)}
 # All the elements inside the popup window. 
-layout = [[sg.Text('Choose Image folder:', size=(20,1), font=('Helevetica', 14))],
+layout = [[sg.Text('Choose Dicom Series of Lungs:', size=(25,1), font=('Helevetica', 14))],
           [sg.Input(key='folder_path', size=(40,1), font=('Helevetica', 12)), 
             sg.FolderBrowse(target="folder_path", **button_prop)],
           [sg.Button('Import', **button_prop), sg.Button('Cancel', **button_prop)]]
@@ -54,39 +41,54 @@ while True:
     if event in ('Import'):
         folder_path = values['folder_path']
         if folder_path != '':
-            num_of_files = get_files()
+            patient = load_dicom_series(folder_path)
+            images = get_pixels_hu(patient)
+            resampled_images = resample(images, patient)
+            temp_resampled_images = resampled_images
+            num_of_files = len(images)
             dicom_series_reader(folder_path, nrrd_file)
             import_success = True
             break
 popup.close()
 
+
 if import_success:
-    slider_prop = {'range':(0, num_of_files), 'orientation':'h', 'size':(70, 20), 'default_value':0}
-    window_prop = {'margins':(0,0), 'size':(520, 400), 'return_keyboard_events':True}
-    buttons_prop = {'size':(30, 1), 'font':('Helvetica', 12)}
+    patient = load_dicom_series(folder_path)
+    images = get_pixels_hu(patient)
+    num_of_files = len(images)
+    dicom_series_reader(folder_path, nrrd_file)
+    
+    slider_prop = {'range':(0, num_of_files-1), 'orientation':'h', 'size':(70, 20), 'default_value':0}
+    window_prop = {'margins':(0,0), 'size':(520, 420), 'return_keyboard_events':True}
+    buttons_prop = {'size':(35, 1), 'font':('Helvetica', 12)}
+    radios_prop = {'size':(30, 1), 'font':('Helvetica', 12)}
 
     col1 = [[sg.Button('View Original Image', **buttons_prop)],
-            [sg.Button('View in 3D', key='original_3d', **buttons_prop)],
-            [sg.Text('_'  * 50, size=(40, 1))],
-            [sg.Text('Segmentation:', size=(20,1), font=('Helvetica', 14))],
-            [sg.Radio('Boundary Extraction', 'loss', **buttons_prop)],
-            [sg.Radio('Region Filling', 'loss', **buttons_prop)],
-            [sg.Radio('Thresholding', 'loss', **buttons_prop)],
-            [sg.Button('Run Segmentation', **buttons_prop)]]
+            [sg.Button('View Transformed Image', **buttons_prop)]]
+
+    col2 = [[sg.Button('View in 3D', key='original_3d', **buttons_prop)],
+            [sg.Button('View in 3D', key="transformed_3d", **buttons_prop)]]      
+
+    col3 = [[sg.Text('Segmentation:', size=(30,1), font=('Helvetica', 14))],
+            [sg.Radio('Smoothing + Thresholding', 'seg', key='op1', **radios_prop)],
+            [sg.Radio('Masking', 'seg', key='op2', **radios_prop)],
+            [sg.Radio('Color Labeling', 'seg', key='op3', **radios_prop)],
+            [sg.Button('Run Segmentation', **buttons_prop)],
+            [sg.Button('Reset', **buttons_prop)]]
     
-    col2 = [[sg.Button('View Transformed Image', **buttons_prop)],
-            [sg.Button('View in 3D', key="transformed_3d", **buttons_prop)],
-            [sg.Text('_'  * 50, size=(40, 1))],
-            [sg.Text('Quantification:', size=(20,1), font=('Helvetica', 14))],
-            [sg.Radio('Quantification method1', 'loss', **buttons_prop)],
-            [sg.Radio('Quantification method2', 'loss', **buttons_prop)],
-            [sg.Radio('Quantification method3', 'loss', **buttons_prop)],
-            [sg.Button('Run Quantification', **buttons_prop)]]
+    col4 = [[sg.Text('Quantification:', size=(30,1), font=('Helvetica', 14))],
+            [sg.Radio('Quantification method1', 'loss', **radios_prop)],
+            [sg.Radio('Quantification method2', 'loss', **radios_prop)],
+            [sg.Radio('Quantification method3', 'loss', **radios_prop)],
+            [sg.Button('Run Quantification', **buttons_prop)],
+            [sg.Button('Reset', **buttons_prop)]]
 
     # All the elements inside the window. 
     layout = [[sg.Text('Move through images:', size=(35, 1), font=('Helvetica', 16))],
               [sg.Slider(key='image_slider', **slider_prop)],
               [sg.Column(col1), sg.Column(col2)],
+              [sg.Text('_'  * 100, size=(100, 1))],
+              [sg.Column(col3), sg.Column(col4)],
               [sg.Text('', size=(400, 1))],
               [sg.Button('View Histogram', size=(80, 1.5))]]
 
@@ -100,10 +102,28 @@ if import_success:
             break
         if event in ('View Original Image'):
             index = int(values['image_slider'])
-            view_dcm('Original Image', files_path[index]) 
+            view_dicom_img('Original Image', images[index], c_label) 
         if event in ('View Transformed Image'):
             index = int(values['image_slider'])
-            view_dcm('Transformed Image', files_path[index]) 
+            if len(t_images) > 0:
+                view_dicom_img('Transformed Image', t_images[index], c_label) 
+            else:
+                view_dicom_img('Transformed Image', images[index], c_label) 
         if event in ('original_3d'):
             view_3d(nrrd_file)
+        if event in ('Run Segmentation'):
+            if values['op1'] == True:
+                t_images = run_smoothing(resampled_images)
+                t_images = run_thresholding(t_images)
+                c_label = False
+            if values['op2'] == True:
+                t_images = run_masking(resampled_images)
+                c_label = False
+            if values['op3'] == True:
+                t_images = run_color_labeling(resampled_images)
+                c_label = True
+        if event in ('Reset'):
+            t_images = images
+        if event in ('View Histogram'):
+            view_histogram(images)
     window.close()

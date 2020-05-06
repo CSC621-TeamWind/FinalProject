@@ -1,10 +1,80 @@
-#!/usr/bin/env python
+# References: 
+# https://simpleitk.readthedocs.io/en/master/link_DicomSeriesReader_docs.html
+# https://www.raddq.com/dicom-processing-segmentation-visualization-in-python/
+# https://vtk.org/gitweb?p=VTK.git;a=blob;f=Examples/Medical/Python/Medical4.py
 
-#
-# This example reads a volume dataset and displays it via volume rendering.
-#
+import SimpleITK as sitk
+import sys, os, vtk
+import numpy as np
+import pydicom as dicom
+import matplotlib.pyplot as plt
 
-import vtk
+def dicom_series_reader(input_dir, output_file):
+    print( "Reading Dicom directory:", input_dir )
+    reader = sitk.ImageSeriesReader()
+
+    dicom_names = reader.GetGDCMSeriesFileNames( input_dir )
+    reader.SetFileNames(dicom_names)
+
+    image = reader.Execute()
+
+    size = image.GetSize()
+    print( "Image size:", size[0], size[1], size[2] )
+
+    print( "Writing image:", output_file )
+
+    sitk.WriteImage( image, output_file )
+
+def load_dicom_series(input_dir):
+    slices = []
+    images_path = os.listdir(input_dir)
+    images_path.sort()
+    for image in images_path:
+        filename = os.path.join(input_dir, image)
+        slice = dicom.dcmread(filename)
+        slices.append(slice)
+    try:
+        slice_thickness = np.abs(slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
+    except:
+        slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
+        
+    for s in slices:
+        s.SliceThickness = slice_thickness
+        
+    return slices
+
+def get_pixels_hu(scans):
+    image = np.stack([s.pixel_array for s in scans])
+    image = image.astype(np.int16)
+
+    image[image == -2000] = 0
+
+    intercept = scans[0].RescaleIntercept
+    slope = scans[0].RescaleSlope
+    
+    if slope != 1:
+        image = slope * image.astype(np.float64)
+        image = image.astype(np.int16)
+        
+    image += np.int16(intercept)
+    
+    return np.array(image, dtype=np.int16)
+
+def view_histogram(imgs):
+    plt.hist(imgs.flatten(), bins=50, color='c')
+    plt.xlabel("Hounsfield Units (HU)")
+    plt.ylabel("Frequency")
+    plt.show(block=False)
+
+def view_dicom_img(img_title, img, c_label):
+    plt.title(img_title)
+    plt.axis('off')
+    plt.draw()
+    if c_label == True:
+        plt.imshow(img)
+    else:
+        plt.imshow(img, 'gray')
+    plt.show(block=False)
 
 def view_3d(filename): 
     # Create the renderer, the render window, and the interactor. The renderer
@@ -16,12 +86,7 @@ def view_3d(filename):
     iren = vtk.vtkRenderWindowInteractor()
     iren.SetRenderWindow(renWin)
 
-    # The following reader is used to read a series of 2D slices (images)
-    # that compose the volume. The slice dimensions are set, and the
-    # pixel spacing. The data Endianness must also be specified. The reader
-    # usese the FilePrefix in combination with the slice number to construct
-    # filenames using the format FilePrefix.%d. (In this case the FilePrefix
-    # is the root name of the file: quarter.)
+    # The following reader is used to read a Nrrd file
     v16 = vtk.vtkNrrdReader()
     v16.SetFileName(filename)
     v16.Update()   
@@ -35,7 +100,7 @@ def view_3d(filename):
 
     # The color transfer function maps voxel intensities to colors.
     # It is modality-specific, and often anatomy-specific as well.
-    # The goal is to one color for flesh (between 500 and 1000)
+    # The goal is to one color for flesh (between 300 and 1000)
     # and another color for bone (1150 and over).
     volumeColor = vtk.vtkColorTransferFunction()
     volumeColor.AddRGBPoint(0,    0.0, 0.0, 0.0)
