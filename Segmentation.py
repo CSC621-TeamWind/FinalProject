@@ -1,3 +1,6 @@
+# References: 
+# https://www.raddq.com/dicom-processing-segmentation-visualization-in-python/
+
 import numpy as np
 import cv2
 import scipy.ndimage
