@@ -14,11 +14,10 @@ sg.theme('BrownBlue')
 folder_path = ''
 files_path = []
 num_of_files = 0
-nrrd_file = './bin/ct_lungs.nrrd' 
+nrrd_file = './ct_lungs.nrrd' 
 import_success = False
 images = []
 resampled_images = []
-temp_resampled_images = []
 t_images = []
 c_label = False
 
@@ -44,7 +43,6 @@ while True:
             patient = load_dicom_series(folder_path)
             images = get_pixels_hu(patient)
             resampled_images = resample(images, patient)
-            temp_resampled_images = resampled_images
             num_of_files = len(images)
             dicom_series_reader(folder_path, nrrd_file)
             import_success = True
@@ -53,20 +51,18 @@ popup.close()
 
 
 if import_success:
-    patient = load_dicom_series(folder_path)
-    images = get_pixels_hu(patient)
-    num_of_files = len(images)
-    dicom_series_reader(folder_path, nrrd_file)
-    
+    t_images = images
     slider_prop = {'range':(0, num_of_files-1), 'orientation':'h', 'size':(70, 20), 'default_value':0}
     window_prop = {'margins':(0,0), 'size':(520, 420), 'return_keyboard_events':True}
     buttons_prop = {'size':(35, 1), 'font':('Helvetica', 12)}
     radios_prop = {'size':(30, 1), 'font':('Helvetica', 12)}
 
     col1 = [[sg.Button('View Original Image', **buttons_prop)],
-            [sg.Button('View Transformed Image', **buttons_prop)]]
+            [sg.Button('View Histogram', key='o_histo', **buttons_prop)],
+            [sg.Button('View in 3D', key='original_3d', **buttons_prop)]]
 
-    col2 = [[sg.Button('View in 3D', key='original_3d', **buttons_prop)],
+    col2 = [[sg.Button('View Transformed Image', **buttons_prop)],
+            [sg.Button('View Histogram', key='n_histo', **buttons_prop)],
             [sg.Button('View in 3D', key="transformed_3d", **buttons_prop)]]      
 
     col3 = [[sg.Text('Segmentation:', size=(30,1), font=('Helvetica', 14))],
@@ -75,22 +71,13 @@ if import_success:
             [sg.Radio('Color Labeling', 'seg', key='op3', **radios_prop)],
             [sg.Button('Run Segmentation', **buttons_prop)],
             [sg.Button('Reset', **buttons_prop)]]
-    
-    col4 = [[sg.Text('Quantification:', size=(30,1), font=('Helvetica', 14))],
-            [sg.Radio('Quantification method1', 'loss', **radios_prop)],
-            [sg.Radio('Quantification method2', 'loss', **radios_prop)],
-            [sg.Radio('Quantification method3', 'loss', **radios_prop)],
-            [sg.Button('Run Quantification', **buttons_prop)],
-            [sg.Button('Reset', **buttons_prop)]]
 
     # All the elements inside the window. 
     layout = [[sg.Text('Move through images:', size=(35, 1), font=('Helvetica', 16))],
               [sg.Slider(key='image_slider', **slider_prop)],
               [sg.Column(col1), sg.Column(col2)],
               [sg.Text('_'  * 100, size=(100, 1))],
-              [sg.Column(col3), sg.Column(col4)],
-              [sg.Text('', size=(400, 1))],
-              [sg.Button('View Histogram', size=(80, 1.5))]]
+              [sg.Column(col3)]]
 
     # Create the window
     window = sg.Window('Medical Image Processor', layout, **window_prop)
@@ -112,6 +99,7 @@ if import_success:
         if event in ('original_3d'):
             view_3d(nrrd_file)
         if event in ('Run Segmentation'):
+            print('Running Segmentation...')
             if values['op1'] == True:
                 t_images = run_smoothing(resampled_images)
                 t_images = run_thresholding(t_images)
@@ -124,6 +112,6 @@ if import_success:
                 c_label = True
         if event in ('Reset'):
             t_images = images
-        if event in ('View Histogram'):
+        if event in ('o_histo'):
             view_histogram(images)
     window.close()
